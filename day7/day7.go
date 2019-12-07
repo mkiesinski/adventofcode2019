@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/mkiesinski/adventofcode2019/intcode"
 )
 
 type instruction struct {
@@ -31,169 +33,6 @@ func toInt(s string) int {
 	result, err := strconv.Atoi(s)
 	check(err)
 	return result
-}
-
-func parseOpcode(code int) instruction {
-	opcode := instruction{}
-	digit := 0
-
-	digit = code % 10
-	code = code / 10
-	opcode.code = ((code % 10) * 10) + digit
-	code = code / 10
-
-	opcode.arg1mode = code % 10
-	code = code / 10
-
-	opcode.arg2mode = code % 10
-	code = code / 10
-
-	opcode.arg3mode = code % 10
-
-	return opcode
-}
-
-func runProgram(program []int, in chan int, out chan int) {
-	cursor := 0
-	for {
-		opcode := parseOpcode(program[cursor])
-		switch opcode.code {
-		case 1:
-			var arg1, arg2, resultDest int
-
-			if opcode.arg1mode == 1 {
-				arg1 = program[cursor+1]
-			} else {
-				arg1 = program[program[cursor+1]]
-			}
-
-			if opcode.arg2mode == 1 {
-				arg2 = program[cursor+2]
-			} else {
-				arg2 = program[program[cursor+2]]
-			}
-
-			resultDest = program[cursor+3]
-
-			program[resultDest] = arg1 + arg2
-			cursor += 4
-		case 2:
-			var arg1, arg2, resultDest int
-
-			if opcode.arg1mode == 1 {
-				arg1 = program[cursor+1]
-			} else {
-				arg1 = program[program[cursor+1]]
-			}
-
-			if opcode.arg2mode == 1 {
-				arg2 = program[cursor+2]
-			} else {
-				arg2 = program[program[cursor+2]]
-			}
-
-			resultDest = program[cursor+3]
-
-			program[resultDest] = arg1 * arg2
-			cursor += 4
-		case 3:
-			value := <-in
-			arg1 := program[cursor+1]
-			program[arg1] = value
-			cursor += 2
-		case 4:
-			arg1 := program[cursor+1]
-			out <- program[arg1]
-			cursor += 2
-		case 5:
-			var arg1, arg2 int
-			if opcode.arg1mode == 1 {
-				arg1 = program[cursor+1]
-			} else {
-				arg1 = program[program[cursor+1]]
-			}
-
-			if opcode.arg2mode == 1 {
-				arg2 = program[cursor+2]
-			} else {
-				arg2 = program[program[cursor+2]]
-			}
-
-			if arg1 != 0 {
-				cursor = arg2
-			} else {
-				cursor += 3
-			}
-		case 6:
-			var arg1, arg2 int
-			if opcode.arg1mode == 1 {
-				arg1 = program[cursor+1]
-			} else {
-				arg1 = program[program[cursor+1]]
-			}
-
-			if opcode.arg2mode == 1 {
-				arg2 = program[cursor+2]
-			} else {
-				arg2 = program[program[cursor+2]]
-			}
-
-			if arg1 == 0 {
-				cursor = arg2
-			} else {
-				cursor += 3
-			}
-		case 7:
-			var arg1, arg2, resultDest int
-			if opcode.arg1mode == 1 {
-				arg1 = program[cursor+1]
-			} else {
-				arg1 = program[program[cursor+1]]
-			}
-
-			if opcode.arg2mode == 1 {
-				arg2 = program[cursor+2]
-			} else {
-				arg2 = program[program[cursor+2]]
-			}
-
-			resultDest = program[cursor+3]
-
-			if arg1 < arg2 {
-				program[resultDest] = 1
-			} else {
-				program[resultDest] = 0
-			}
-
-			cursor += 4
-		case 8:
-			var arg1, arg2, resultDest int
-			if opcode.arg1mode == 1 {
-				arg1 = program[cursor+1]
-			} else {
-				arg1 = program[program[cursor+1]]
-			}
-
-			if opcode.arg2mode == 1 {
-				arg2 = program[cursor+2]
-			} else {
-				arg2 = program[program[cursor+2]]
-			}
-
-			resultDest = program[cursor+3]
-
-			if arg1 == arg2 {
-				program[resultDest] = 1
-			} else {
-				program[resultDest] = 0
-			}
-			cursor += 4
-		case 99:
-			return
-		default:
-			panic("Invalid OpCode")
-		}
-	}
 }
 
 func verifySequence(sequence string) bool {
@@ -234,7 +73,8 @@ func calculateSequence(baseProgram []int, sequence string) int {
 
 	for _, s := range sequence {
 		setting := toInt(string(s))
-		go runProgram(append(baseProgram[:0:0], baseProgram...), inout, inout)
+		program := intcode.Program{Memory: append(baseProgram[:0:0], baseProgram...), ChIn: inout, ChOut: inout}
+		go program.Run()
 		inout <- setting
 		inout <- value
 		value = <-inout
@@ -262,23 +102,28 @@ func calculateFeedbackLoop(baseProgram []int, sequence string) int {
 	waitgroup.Add(5)
 	controlgroup.Add(1)
 	go func() {
-		runProgram(append(baseProgram[:0:0], baseProgram...), inA, inB)
+		program := intcode.Program{Memory: append(baseProgram[:0:0], baseProgram...), ChIn: inA, ChOut: inB}
+		program.Run()
 		waitgroup.Done()
 	}()
 	go func() {
-		runProgram(append(baseProgram[:0:0], baseProgram...), inB, inC)
+		program := intcode.Program{Memory: append(baseProgram[:0:0], baseProgram...), ChIn: inB, ChOut: inC}
+		program.Run()
 		waitgroup.Done()
 	}()
 	go func() {
-		runProgram(append(baseProgram[:0:0], baseProgram...), inC, inD)
+		program := intcode.Program{Memory: append(baseProgram[:0:0], baseProgram...), ChIn: inC, ChOut: inD}
+		program.Run()
 		waitgroup.Done()
 	}()
 	go func() {
-		runProgram(append(baseProgram[:0:0], baseProgram...), inD, inE)
+		program := intcode.Program{Memory: append(baseProgram[:0:0], baseProgram...), ChIn: inD, ChOut: inE}
+		program.Run()
 		waitgroup.Done()
 	}()
 	go func() {
-		runProgram(append(baseProgram[:0:0], baseProgram...), inE, feedBack)
+		program := intcode.Program{Memory: append(baseProgram[:0:0], baseProgram...), ChIn: inE, ChOut: feedBack}
+		program.Run()
 		close(feedBack)
 		waitgroup.Done()
 	}()
