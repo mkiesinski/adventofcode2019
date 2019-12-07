@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"strconv"
 	"strings"
+
+	"github.com/mkiesinski/adventofcode2019/intcode"
 )
 
 func check(err error) {
@@ -25,38 +27,16 @@ func toInt(s string) int {
 	return result
 }
 
-func runProgram(program []int) int {
-	for i := 0; i < len(program); i += 4 {
-		switch program[i] {
-		case 1:
-			arg1 := program[i+1]
-			arg2 := program[i+2]
-			resultDest := program[i+3]
-			program[resultDest] = program[arg1] + program[arg2]
-		case 2:
-			arg1 := program[i+1]
-			arg2 := program[i+2]
-			resultDest := program[i+3]
-			program[resultDest] = program[arg1] * program[arg2]
-		case 99:
-			return program[0]
-		default:
-			panic("Invalid OpCode")
-		}
-	}
-
-	return 0
-}
-
 func findNounVerb(baseProgram []int, search int) int {
 	var noun, verb int
 
 	for verb = 0; verb < 100; verb++ {
 		for noun = 0; noun < 100; noun++ {
-			program := append(baseProgram[:0:0], baseProgram...)
-			program[1] = noun
-			program[2] = verb
-			value := runProgram(program)
+			program := intcode.Program{Memory: append(baseProgram[:0:0], baseProgram...), ChIn: nil, ChOut: nil}
+			program.Memory[1] = noun
+			program.Memory[2] = verb
+			program.Run()
+			value := program.Memory[0]
 			if value == search {
 				return (100 * noun) + verb
 			}
@@ -75,10 +55,12 @@ func main() {
 		program[i] = toInt(s)
 	}
 
-	program[1] = 12
-	program[2] = 2
 	fmt.Println("=== Part 1 ===")
-	fmt.Printf("1202 error execution result: %d\n", runProgram(append(program[:0:0], program...)))
+	prog := intcode.Program{Memory: append(program[:0:0], program...), ChIn: nil, ChOut: nil}
+	prog.Memory[1] = 12
+	prog.Memory[2] = 2
+	prog.Run()
+	fmt.Printf("1202 error execution result: %d\n", prog.Memory[0])
 
 	fmt.Println("=== Part 2 ===")
 	result := 19690720
