@@ -10,13 +10,6 @@ import (
 	"github.com/mkiesinski/adventofcode2019/intcode"
 )
 
-type instruction struct {
-	code     int
-	arg1mode int
-	arg2mode int
-	arg3mode int
-}
-
 func check(err error) {
 	if err != nil {
 		panic(err)
