@@ -2,16 +2,19 @@ package intcode
 
 // OPCODES
 const (
-	Add      = 1
-	Multiply = 2
-	Input    = 3
-	Output   = 4
-	JNZ      = 5
-	JEZ      = 6
-	LessThan = 7
-	Equals   = 8
-	Halt     = 99
+	Add        = 1
+	Multiply   = 2
+	Input      = 3
+	Output     = 4
+	JNZ        = 5
+	JEZ        = 6
+	LessThan   = 7
+	Equals     = 8
+	AdjustBase = 9
+	Halt       = 99
 )
+
+const maxMemory = 2048
 
 type opcode struct {
 	code     int
@@ -38,42 +41,49 @@ func parseOpcode(code int) opcode {
 type Program struct {
 	Memory []int
 	IP     int
+	RP     int
 	ChIn   chan int
 	ChOut  chan int
 }
 
+func (p *Program) LoadMemory(prog []int) {
+	p.Memory = make([]int, maxMemory)
+	copy(p.Memory, prog)
+}
+
 func (p *Program) Run() {
 	p.IP = 0
+	p.RP = 0
 
 	for {
 		opcode := parseOpcode(p.Memory[p.IP])
 		switch opcode.code {
 		case Add:
-			arg1 := p.getArg(0, &opcode)
-			arg2 := p.getArg(1, &opcode)
-			dest := p.Memory[p.IP+3]
+			arg1, _ := p.getArg(0, &opcode)
+			arg2, _ := p.getArg(1, &opcode)
+			_, dest := p.getArg(2, &opcode)
 
 			p.Memory[dest] = arg1 + arg2
 			p.IP += 4
 		case Multiply:
-			arg1 := p.getArg(0, &opcode)
-			arg2 := p.getArg(1, &opcode)
-			dest := p.Memory[p.IP+3]
+			arg1, _ := p.getArg(0, &opcode)
+			arg2, _ := p.getArg(1, &opcode)
+			_, dest := p.getArg(2, &opcode)
 
 			p.Memory[dest] = arg1 * arg2
 			p.IP += 4
 		case Input:
-			dest := p.Memory[p.IP+1]
+			_, dest := p.getArg(0, &opcode)
 			value := <-p.ChIn
 			p.Memory[dest] = value
 			p.IP += 2
 		case Output:
-			arg1 := p.getArg(0, &opcode)
+			arg1, _ := p.getArg(0, &opcode)
 			p.ChOut <- arg1
 			p.IP += 2
 		case JNZ:
-			arg1 := p.getArg(0, &opcode)
-			arg2 := p.getArg(1, &opcode)
+			arg1, _ := p.getArg(0, &opcode)
+			arg2, _ := p.getArg(1, &opcode)
 
 			if arg1 != 0 {
 				p.IP = arg2
@@ -81,8 +91,8 @@ func (p *Program) Run() {
 				p.IP += 3
 			}
 		case JEZ:
-			arg1 := p.getArg(0, &opcode)
-			arg2 := p.getArg(1, &opcode)
+			arg1, _ := p.getArg(0, &opcode)
+			arg2, _ := p.getArg(1, &opcode)
 
 			if arg1 == 0 {
 				p.IP = arg2
@@ -90,9 +100,9 @@ func (p *Program) Run() {
 				p.IP += 3
 			}
 		case LessThan:
-			arg1 := p.getArg(0, &opcode)
-			arg2 := p.getArg(1, &opcode)
-			dest := p.Memory[p.IP+3]
+			arg1, _ := p.getArg(0, &opcode)
+			arg2, _ := p.getArg(1, &opcode)
+			_, dest := p.getArg(2, &opcode)
 
 			if arg1 < arg2 {
 				p.Memory[dest] = 1
@@ -101,9 +111,9 @@ func (p *Program) Run() {
 			}
 			p.IP += 4
 		case Equals:
-			arg1 := p.getArg(0, &opcode)
-			arg2 := p.getArg(1, &opcode)
-			dest := p.Memory[p.IP+3]
+			arg1, _ := p.getArg(0, &opcode)
+			arg2, _ := p.getArg(1, &opcode)
+			_, dest := p.getArg(2, &opcode)
 
 			if arg1 == arg2 {
 				p.Memory[dest] = 1
@@ -112,6 +122,10 @@ func (p *Program) Run() {
 			}
 
 			p.IP += 4
+		case AdjustBase:
+			arg1, _ := p.getArg(0, &opcode)
+			p.RP += arg1
+			p.IP += 2
 		case Halt:
 			return
 		default:
@@ -120,9 +134,14 @@ func (p *Program) Run() {
 	}
 }
 
-func (p *Program) getArg(i int, instr *opcode) int {
-	if instr.argModes[i] == 1 {
-		return p.Memory[p.IP+1+i]
+func (p *Program) getArg(i int, instr *opcode) (int, int) {
+	switch instr.argModes[i] {
+	case 0:
+		return p.Memory[p.Memory[p.IP+1+i]], p.Memory[p.IP+1+i]
+	case 1:
+		return p.Memory[p.IP+1+i], 0
+	case 2:
+		return p.Memory[p.RP+(p.Memory[p.IP+1+i])], p.RP + (p.Memory[p.IP+1+i])
 	}
-	return p.Memory[p.Memory[p.IP+1+i]]
+	return 0, 0
 }
